@@ -1,0 +1,7 @@
+name = Roles sync
+description = This module provides functionality to sync roles from Groups G suite to Drupal.
+core = 7.x
+dependencies[] = libraries
+dependencies[] = google_one_tap
+dependencies[] = gauth
+configure = admin/config/services/google_one_tap

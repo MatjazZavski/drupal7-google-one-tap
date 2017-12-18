@@ -1,0 +1,187 @@
+<?php
+
+/**
+ * Implements hook_libraries_info().
+ */
+function google_one_tap_libraries_info() {
+  $config_dir = conf_path();
+  $lib_path = 'sites/all/libraries/google-api-php-client';
+  if (file_exists(DRUPAL_ROOT . '/' . $config_dir . '/libraries')) {
+    $lib_path = $config_dir . '/libraries/google-api-php-client';
+  }
+  $file_path = 'src/Google/Client.php';
+  $include_path = 'vendor/autoload.php';
+  $line_number = 42;
+  if (!file_exists(DRUPAL_ROOT . '/' . $lib_path . '/vendor')) { // Composer install;
+    $file_path = 'google/apiclient/src/Google/Client.php';
+    $include_path = 'autoload.php';
+    $line_number = 40;
+  }
+  $libraries['google-api-php-client'] = [
+    'name'     => 'Google OAuth2 Library', 'vendor url' => 'http://code.google.com/p/google-api-php-client', 'download url' => 'https://github.com/google/google-api-php-client/releases', 'version arguments' => [
+      'file' => $file_path, 'pattern' => '/LIBVER = "([0-9\.a-z\-]+)/', 'lines' => $line_number,
+    ], 'files' => [
+      'php' => [
+        $include_path,
+      ],
+    ],
+  ];
+
+  return $libraries;
+}
+
+function google_one_tap_preprocess_page(&$variables) {
+  if (!user_is_anonymous()) {
+    return;
+  } elseif (!drupal_is_front_page()) {
+    return;
+  }
+  if (!empty($_COOKIE['Drupal_visitor_user_logged_out'])) {
+    user_cookie_delete('user_logged_out');
+    drupal_add_js(['logged_out' => 'true'], 'setting');
+  } else {
+    drupal_add_js('https://smartlock.google.com/client', 'external');
+    drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
+    drupal_add_js(['client_id' => '1084001640295-jbh1p6pcg93t7c8qsvc5ieq51oqbe112.apps.googleusercontent.com'], 'setting');
+  }
+}
+
+function google_one_tap_menu() {
+  $items = [];
+
+  $items['admin/config/services/google_one_tap'] = [
+    'title'           => 'Google One Tap', //page title
+    'description'     => 'Google One Tap settings.', 'page callback' => 'drupal_get_form', //this is the function that will be called when the page is accessed.  for a form, use drupal_get_form
+    'page arguments'  => ['google_one_tap_settings_form'], //put the name of the form here
+    'access callback' => TRUE, 'type' => MENU_NORMAL_ITEM,
+  ];
+  $items['google-one-tap/login'] = [
+    'page callback' => '_google_one_tap_user_login', 'access arguments' => ['access content'], 'type' => MENU_CALLBACK,
+  ];
+
+  return $items;
+}
+
+function _google_one_tap_user_login() {
+  $info = libraries_load('google-api-php-client');
+  if (!$info['loaded']) {
+    drupal_set_message(t("Can't authenticate with google as library is missing check Status report or Readme for requirements"), 'error');
+
+    return FALSE;
+  }
+  if (!$token = $_POST['idToken']) {
+    throw new HttpException('Missing idToken');
+  }
+
+  $client = new Google_Client(['client_id' => '1084001640295-jbh1p6pcg93t7c8qsvc5ieq51oqbe112.apps.googleusercontent.com']);
+
+  $payload = $client->verifyIdToken($token);
+  if (!$payload) {
+    throw new HttpException('Invalid Token');
+  }
+
+  if (variable_get('use_domain')) {
+    if ($payload['hd'] != variable_get('domain')) {
+      drupal_set_message(t('You are not authenticated user of domain %domain', ['%domain' => variable_get('domain')]), 'error');
+      user_cookie_save(['user_logged_out' => TRUE]);
+
+      return;
+    }
+  }
+
+  if (empty($payload['email']) || !valid_email_address($payload['email'])) {
+    throw new HttpRequestException('Incorrect email address');
+  }
+
+  if (!$user = user_load_by_mail($payload['email'])) {
+    watchdog(WATCHDOG_NOTICE, 'Registering a new user for &mail', ['%mail' => $payload['email']]);
+
+    $edit = [
+      'name' => findNextAvailableAccountName($payload['name']),
+      'mail' => $payload['email'],
+      'status' => 1,
+    ];
+
+    drupal_alter('google_one_tap_new_user', $edit);
+
+    $new_user = user_save('', $edit);
+    $user = $new_user;
+  }
+  if (user_is_blocked($user->name)) {
+    throw new HttpRequestException('The user has not been activated or is blocked.');
+  }
+
+  $user_id['uid'] = $user->uid;
+  user_login_submit( '', $user_id);
+}
+
+function google_one_tap_settings_form($form, &$form_state) {
+  $form['domain'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('G Suite Domain'),
+    '#collapsible' => TRUE, // Added
+    '#collapsed' => FALSE,  // Added
+  );
+  $form['domain']['use_domain'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Use G Suite domain!'),
+    '#description' => t('If you want to restrict access to only members of your G Suite domain use this option.'),
+    '#default_value' => variable_get('use_domain', FALSE),
+  );
+  $form['domain']['domain_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('G Suite domain'),
+    '#description' => t('Example: domain.com'),
+    '#default_value' => variable_get('domain', ''),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="use_domain"]' => array('checked' => TRUE),
+      ), 'required' => array(
+        ':input[name="use_domain"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+  $form['submit'] = [
+    '#type' => 'submit', '#value' => t('Save configuration'),
+  ];
+  $form['#validate'][] = 'google_one_tap_settings_validate';
+  $form['#submit'][] = 'google_one_tap_settings_submit';
+
+  return $form;
+}
+
+function google_one_tap_settings_validate($form, &$form_state) {
+}
+
+function google_one_tap_settings_submit($form, &$form_state) {
+  if ($form_state['values']['use_domain'] == FALSE && !empty($form_state['values']['domain_name'])) {
+    variable_del('domain_name');
+    variable_set('use_domain', FALSE);
+  } else {
+    variable_set('domain_name', $form_state['values']['domain_name']);
+    variable_set('use_domain', TRUE);
+  }
+  drupal_set_message(t('The configuration options have been saved.'));
+}
+
+function findNextAvailableAccountName($name) {
+  $count = 0;
+  $old_name = $name;
+  while (accountNameIsRegistered($name)) {
+    $count++;
+    $name = $old_name . '_' . $count;
+  };
+
+  return $name;
+}
+
+function accountNameIsRegistered($name) {
+  return db_query("SELECT u.name as num_users FROM users u WHERE u.name = :name", [':name' => $name])->fetchField();
+}
+
+function google_one_tap_user_logout($account) {
+  //drupal_add_js('https://smartlock.google.com/client', 'external');
+  //drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
+  //drupal_add_js(['test' => 'true'], 'setting');
+  user_cookie_save(['user_logged_out' => TRUE]);
+}

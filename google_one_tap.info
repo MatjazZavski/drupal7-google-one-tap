@@ -1,0 +1,6 @@
+name = Google One Tap
+description = Google One Tap provides functionality for automatic login with google account.
+core = 7.x
+dependencies[] = libraries
+dependencies[] = gauth
+configure = admin/config/services/google_one_tap
