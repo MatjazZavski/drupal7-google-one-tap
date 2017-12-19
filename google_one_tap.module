@@ -73,8 +73,7 @@ function _google_one_tap_user_login() {
     throw new HttpException('Missing idToken');
   }
 
-  $client = new Google_Client(['client_id' => '1084001640295-jbh1p6pcg93t7c8qsvc5ieq51oqbe112.apps.googleusercontent.com']);
-
+  $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   $payload = $client->verifyIdToken($token);
   if (!$payload) {
     throw new HttpException('Invalid Token');
@@ -116,19 +115,43 @@ function _google_one_tap_user_login() {
 }
 
 function google_one_tap_settings_form($form, &$form_state) {
-  $form['domain'] = array(
+  $query = db_select('gauth_accounts', 'ga');
+  $query->fields('ga');
+  $result = $query->execute()->fetchAll();
+
+  $options = array();
+  $options[''] = t('Select a user');
+  foreach ($result as $item) {
+    $options[$item->id] = $item->name;
+  }
+  $form['settings']['gauth_name'] = array(
+    '#type' => 'select',
+    '#title' => t('User'),
+    '#description' => t('You need to select account from gauth module.'),
+    '#default_value' => variable_get('gauth_name', ''),
+    '#required' => TRUE ,
+    '#options' => $options,
+    '#weight' => -10,
+  );
+  $form['settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Settings'),
+    '#collapsible' => TRUE, // Added
+    '#collapsed' => FALSE,  // Added
+  );
+  $form['settings']['domain'] = array(
     '#type' => 'fieldset',
     '#title' => t('G Suite Domain'),
     '#collapsible' => TRUE, // Added
     '#collapsed' => FALSE,  // Added
   );
-  $form['domain']['use_domain'] = array(
+  $form['settings']['domain']['use_domain'] = array(
     '#type' => 'checkbox',
     '#title' => t('Use G Suite domain!'),
     '#description' => t('If you want to restrict access to only members of your G Suite domain use this option.'),
     '#default_value' => variable_get('use_domain', FALSE),
   );
-  $form['domain']['domain_name'] = array(
+  $form['settings']['domain']['domain_name'] = array(
     '#type' => 'textfield',
     '#title' => t('G Suite domain'),
     '#description' => t('Example: domain.com'),
@@ -161,6 +184,7 @@ function google_one_tap_settings_submit($form, &$form_state) {
     variable_set('domain_name', $form_state['values']['domain_name']);
     variable_set('use_domain', TRUE);
   }
+  variable_set('gauth_name', $form_state['values']['gauth_name']);
   drupal_set_message(t('The configuration options have been saved.'));
 }
 
@@ -180,8 +204,5 @@ function accountNameIsRegistered($name) {
 }
 
 function google_one_tap_user_logout($account) {
-  //drupal_add_js('https://smartlock.google.com/client', 'external');
-  //drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
-  //drupal_add_js(['test' => 'true'], 'setting');
   user_cookie_save(['user_logged_out' => TRUE]);
 }

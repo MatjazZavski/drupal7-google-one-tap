@@ -1,6 +1,6 @@
 <?php
 
-function roles_sync_form_google_one_tap_settings_form_alter(&$form, &$form_state, $form_id) {
+function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$form, &$form_state, $form_id) {
   $info = libraries_load('google-api-php-client');
   if (!$info['loaded']) {
     drupal_set_message(t("Can't authenticate with google as library is missing check Status report or Readme for requirements"), 'error');
@@ -15,15 +15,7 @@ function roles_sync_form_google_one_tap_settings_form_alter(&$form, &$form_state
     $groups[$group->getName()] = $group->getName();
   }
 
-  $options = gauth_account_list();
-  $form['gauth_name'] = array(
-    '#type' => 'select',
-    '#title' => t('User'),
-    '#description' => t('You need to select account from gauth module.'),
-    '#required' => TRUE,
-    '#options' => array(),
-  );
-  $form['domain']['sync_roles'] = array(
+  $form['settings']['domain']['sync_roles'] = array(
     '#type' => 'checkbox',
     '#title' => t('Sync roles'),
     '#default_value' => variable_get('sync_roles', false),
@@ -34,28 +26,29 @@ function roles_sync_form_google_one_tap_settings_form_alter(&$form, &$form_state
       ),
     ),
   );
-  $form['domain']['roles_fieldset'] = array(
+  $form['settings']['domain']['roles_fieldset'] = array(
     '#type' => 'fieldset',
     '#title' => t('Roles'),
     '#description' => t('In select field are displayed roles from Drupal, in label is displayed group from Google.'),
     '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
+    '#collapsed' => TRUE,
     '#states' => array(
       'visible' => array(
         ':input[name="sync_roles"]' => array('checked' => TRUE),
+        ':input[name="use_domain"]' => array('checked' => TRUE),
       ),
     ),
   );
   $roles = user_roles();
   $options = array();
   foreach ($roles as $role) {
-    if ($role != 'authenticated user') {
+    if ($role != 'anonymous user') {
       $options[$role] = $role;
     }
   }
   if (!empty($groups)) {
     foreach ($groups as $group) {
-      $form['domain']['roles_fieldset']['group_' . $group] = array(
+      $form['settings']['domain']['roles_fieldset']['group_' . $group] = array(
         '#type' => 'select',
         '#title' => $group,
         '#default_value' => variable_get('group_' . $group, ''),
@@ -69,6 +62,7 @@ function roles_sync_form_google_one_tap_settings_form_alter(&$form, &$form_state
 function google_one_tap_roles_sync_submit_form($form, &$form_state) {
   $values = $form_state['values'];
   variable_set('sync_roles', $values['sync_roles']);
+
   foreach ($values as $key => $value) {
     if (strpos($key, 'group_') === 0) {
       variable_set($key, $value);
@@ -76,7 +70,7 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
   }
 }
 
-function roles_sync_google_one_tap_new_user_alter(&$edit) {
+function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
   $client = gauth_client_get('admin', TRUE);
   $service = new Google_Service_Directory($client);
   $result = $service->groups->listGroups(['domain' => variable_get('domain')]);
