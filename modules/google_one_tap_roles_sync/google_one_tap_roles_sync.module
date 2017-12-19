@@ -74,7 +74,8 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
   $values = $form_state['values'];
   if ($values['use_domain'] == FALSE) {
     variable_set('sync_roles', FALSE);
-  } else {
+  }
+  else {
     variable_set('sync_roles', $values['sync_roles']);
   }
 
@@ -82,7 +83,8 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
     if (strpos($key, 'group_') === 0) {
       if (variable_get('sync_roles') == FALSE) {
         variable_set($key, '');
-      } else {
+      }
+      else {
         variable_set($key, $value);
       }
     }
@@ -97,10 +99,9 @@ function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
   $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   $service = new Google_Service_Directory($client);
   // Load all groups.
-  $result = $service->groups->listGroups(['domain' => variable_get('domain')]);
+  $result = $service->groups->listGroups(['domain' => variable_get('domain_name')]);
   $g_groups = $result->getGroups();
 
-  // Go through each group.
   foreach ($g_groups as $group) {
     // Get all members of this group.
     $group_members = $service->members->listMembers($group->getId());
@@ -129,4 +130,3 @@ function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
     }
   }
 }
-

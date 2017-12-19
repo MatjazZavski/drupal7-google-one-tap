@@ -80,7 +80,7 @@ function _google_one_tap_user_login() {
   // Checks if we are using option domain restriction.
   if (variable_get('use_domain')) {
     if ($payload['hd'] != variable_get('domain_name')) {
-      drupal_set_message(t('You are not authenticated user of domain %domain', ['%domain' => variable_get('domain')]), 'error');
+      drupal_set_message(t('You are not authenticated user of domain %domain', ['%domain' => variable_get('domain_name')]), 'error');
       user_cookie_save(['user_logged_out' => TRUE]);
       return NULL;
     }
@@ -204,10 +204,10 @@ function google_one_tap_settings_submit($form, &$form_state) {
   // If have disabled domain restriction reset domain name.
   if ($form_state['values']['use_domain'] == FALSE && !empty($form_state['values']['domain_name'])) {
     variable_del('domain_name');
-    variable_set('use_domain', FALSE);
+    variable_set('use_domain', $form_state['values']['use_domain']);
   } else {
     variable_set('domain_name', $form_state['values']['domain_name']);
-    variable_set('use_domain', TRUE);
+    variable_set('use_domain', $form_state['values']['use_domain']);
   }
   variable_set('gauth_name', $form_state['values']['gauth_name']);
   drupal_set_message(t('The configuration options have been saved.'));
