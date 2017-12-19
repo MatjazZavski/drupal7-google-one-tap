@@ -50,8 +50,12 @@
           });
         },
           (error) => {
-            console.log(error.type);
-            alert(error);
+            if (error.type === 'noCredentialsAvailable') {
+              alert('You are not logged in in any Google Account.');
+            } else {
+              console.log(error.type);
+              alert(error);
+            }
           });
         };
       }
