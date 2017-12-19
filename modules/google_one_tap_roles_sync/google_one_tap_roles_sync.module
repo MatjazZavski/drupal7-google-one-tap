@@ -72,11 +72,19 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
  */
 function google_one_tap_roles_sync_submit_form($form, &$form_state) {
   $values = $form_state['values'];
-  variable_set('sync_roles', $values['sync_roles']);
+  if ($values['use_domain'] == FALSE) {
+    variable_set('sync_roles', FALSE);
+  } else {
+    variable_set('sync_roles', $values['sync_roles']);
+  }
 
   foreach ($values as $key => $value) {
     if (strpos($key, 'group_') === 0) {
-      variable_set($key, $value);
+      if (variable_get('sync_roles') == FALSE) {
+        variable_set($key, '');
+      } else {
+        variable_set($key, $value);
+      }
     }
   }
 }

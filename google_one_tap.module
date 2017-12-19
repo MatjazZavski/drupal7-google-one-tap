@@ -232,6 +232,9 @@ function google_one_tap_settings_form($form, &$form_state) {
  * Implements hook_FORM_ID_validate().
  */
 function google_one_tap_settings_validate($form, &$form_state) {
+  if ($form_state['values']['use_domain'] == TRUE && empty($form_state['values']['domain_name'])) {
+    form_set_error('domain_name', t('This field is required'));
+  }
 }
 
 /**
