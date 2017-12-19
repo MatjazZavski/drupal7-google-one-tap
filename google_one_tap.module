@@ -82,8 +82,7 @@ function _google_one_tap_user_login() {
     if ($payload['hd'] != variable_get('domain_name')) {
       drupal_set_message(t('You are not authenticated user of domain %domain', ['%domain' => variable_get('domain')]), 'error');
       user_cookie_save(['user_logged_out' => TRUE]);
-
-      return;
+      return NULL;
     }
   }
 
