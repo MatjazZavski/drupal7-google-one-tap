@@ -118,7 +118,7 @@ function _google_one_tap_user_login() {
 
   // Checks if we are using option domain restriction.
   if (variable_get('use_domain')) {
-    if ($payload['hd'] != variable_get('domain')) {
+    if ($payload['hd'] != variable_get('domain_name')) {
       drupal_set_message(t('You are not authenticated user of domain %domain', ['%domain' => variable_get('domain')]), 'error');
       user_cookie_save(['user_logged_out' => TRUE]);
 
@@ -209,7 +209,7 @@ function google_one_tap_settings_form($form, &$form_state) {
     '#type' => 'textfield',
     '#title' => t('G Suite domain'),
     '#description' => t('Example: domain.com'),
-    '#default_value' => variable_get('domain', ''),
+    '#default_value' => variable_get('domain_name', ''),
     '#states' => array(
       'visible' => array(
         ':input[name="use_domain"]' => array('checked' => TRUE),
