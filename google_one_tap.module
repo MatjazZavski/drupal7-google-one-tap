@@ -1,50 +1,11 @@
 <?php
 
 /**
- * Implements hook_libraries_info().
- */
-function google_one_tap_libraries_info() {
-  $config_dir = conf_path();
-  $lib_path = 'sites/all/libraries/google-api-php-client';
-  if (file_exists(DRUPAL_ROOT . '/' . $config_dir . '/libraries')) {
-    $lib_path = $config_dir . '/libraries/google-api-php-client';
-  }
-  $file_path = 'src/Google/Client.php';
-  $include_path = 'vendor/autoload.php';
-  $line_number = 42;
-  if (!file_exists(DRUPAL_ROOT . '/' . $lib_path . '/vendor')) { // Composer install;
-    $file_path = 'google/apiclient/src/Google/Client.php';
-    $include_path = 'autoload.php';
-    $line_number = 40;
-  }
-  $libraries['google-api-php-client'] = array(
-    'name' => 'Google OAuth2 Library',
-    'vendor url' => 'http://code.google.com/p/google-api-php-client',
-    'download url' => 'https://github.com/google/google-api-php-client/releases',
-    'version arguments' => array(
-      'file' => $file_path,
-      'pattern' => '/LIBVER = "([0-9\.a-z\-]+)/',
-      'lines' => $line_number,
-    ), 'files' => array(
-      'php' => array(
-        $include_path,
-      ),
-    ),
-  );
-
-  return $libraries;
-}
-
-/**
  * Implements hook_preprocess_page().
  */
 function google_one_tap_preprocess_page(&$variables) {
-  // Return if user is anonymous or is not on front page.
-  /*
-   * For now this module enables google login just on front of the website
-   * maybe there should be admin interface with conditions when to display
-   * popup and when not.
-   */
+  // Return if user is anonymous, not on the front page,
+  // login page or register page.
   if (!user_is_anonymous()) {
     return;
   } elseif (!drupal_is_front_page() && current_path() != 'user/login' && current_path() != 'user/registration') {
@@ -93,9 +54,9 @@ function google_one_tap_menu() {
  * Callback function when user log's in.
  *
  * @return bool
+ *   Return if error.
  *
- * @throws \HttpException
- * @throws \HttpRequestException
+ * @throws \Exception
  */
 function _google_one_tap_user_login() {
   // Check if we have function and valid token.
@@ -106,14 +67,14 @@ function _google_one_tap_user_login() {
     return FALSE;
   }
   if (!$token = $_POST['idToken']) {
-    throw new HttpException('Missing idToken');
+    throw new Exception('Missing idToken');
   }
 
   // Verify token.
   $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   $payload = $client->verifyIdToken($token);
   if (!$payload) {
-    throw new HttpException('Invalid Token');
+    throw new Exception('Invalid Token');
   }
 
   // Checks if we are using option domain restriction.
@@ -128,7 +89,7 @@ function _google_one_tap_user_login() {
 
   // Throw exception for wrong email.
   if (empty($payload['email']) || !valid_email_address($payload['email'])) {
-    throw new HttpRequestException('Incorrect email address');
+    throw new Exception('Incorrect email address');
   }
 
   // If user doesn't exist create new one.
@@ -144,7 +105,7 @@ function _google_one_tap_user_login() {
   }
   // If user is blocked throw exception.
   elseif (user_is_blocked($user->name)) {
-    throw new HttpRequestException('The user has not been activated or is blocked.');
+    throw new Exception('The user has not been activated or is blocked.');
   }
   // If we have user decode std class to array.
   else {
