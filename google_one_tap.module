@@ -1,8 +1,5 @@
 <?php
 
-/**
- * Implements hook_libraries_info().
- */
 function google_one_tap_libraries_info() {
   $config_dir = conf_path();
   $lib_path = 'sites/all/libraries/google-api-php-client';
@@ -39,10 +36,12 @@ function google_one_tap_preprocess_page(&$variables) {
   if (!empty($_COOKIE['Drupal_visitor_user_logged_out'])) {
     user_cookie_delete('user_logged_out');
     drupal_add_js(['logged_out' => 'true'], 'setting');
-  } else {
+  }
+  else {
+    $client = gauth_client_get(variable_get('gauth_name'), FALSE);
     drupal_add_js('https://smartlock.google.com/client', 'external');
     drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
-    drupal_add_js(['client_id' => '1084001640295-jbh1p6pcg93t7c8qsvc5ieq51oqbe112.apps.googleusercontent.com'], 'setting');
+    drupal_add_js(['client_id' => $client->getClientId()], 'setting');
   }
 }
 
@@ -50,13 +49,16 @@ function google_one_tap_menu() {
   $items = [];
 
   $items['admin/config/services/google_one_tap'] = [
-    'title'           => 'Google One Tap', //page title
-    'description'     => 'Google One Tap settings.', 'page callback' => 'drupal_get_form', //this is the function that will be called when the page is accessed.  for a form, use drupal_get_form
+    'title'           => 'Google One Tap Settings', //page title
+    'description'     => 'Google One Tap settings.',
+    'page callback' => 'drupal_get_form', //this is the function that will be called when the page is accessed.  for a form, use drupal_get_form
     'page arguments'  => ['google_one_tap_settings_form'], //put the name of the form here
     'access callback' => TRUE, 'type' => MENU_NORMAL_ITEM,
   ];
   $items['google-one-tap/login'] = [
-    'page callback' => '_google_one_tap_user_login', 'access arguments' => ['access content'], 'type' => MENU_CALLBACK,
+    'page callback' => '_google_one_tap_user_login',
+    'access arguments' => ['access content'],
+    'type' => MENU_CALLBACK,
   ];
 
   return $items;
@@ -94,21 +96,23 @@ function _google_one_tap_user_login() {
 
   if (!$user = user_load_by_mail($payload['email'])) {
     watchdog(WATCHDOG_NOTICE, 'Registering a new user for &mail', ['%mail' => $payload['email']]);
-
-    $edit = [
+    $edit = array(
       'name' => findNextAvailableAccountName($payload['name']),
       'mail' => $payload['email'],
       'status' => 1,
-    ];
-
-    drupal_alter('google_one_tap_new_user', $edit);
-
-    $new_user = user_save('', $edit);
-    $user = $new_user;
+    );
+    $user = '';
   }
-  if (user_is_blocked($user->name)) {
+  elseif (user_is_blocked($user->name)) {
     throw new HttpRequestException('The user has not been activated or is blocked.');
   }
+  else {
+    $edit = json_decode(json_encode($user), true);
+  }
+
+  drupal_alter('google_one_tap_new_user', $edit);
+
+  $user = user_save($user, $edit);
 
   $user_id['uid'] = $user->uid;
   user_login_submit( '', $user_id);
@@ -124,6 +128,12 @@ function google_one_tap_settings_form($form, &$form_state) {
   foreach ($result as $item) {
     $options[$item->id] = $item->name;
   }
+  $form['settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Settings'),
+    '#collapsible' => TRUE, // Added
+    '#collapsed' => FALSE,  // Added
+  );
   $form['settings']['gauth_name'] = array(
     '#type' => 'select',
     '#title' => t('User'),
@@ -132,12 +142,6 @@ function google_one_tap_settings_form($form, &$form_state) {
     '#required' => TRUE ,
     '#options' => $options,
     '#weight' => -10,
-  );
-  $form['settings'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Settings'),
-    '#collapsible' => TRUE, // Added
-    '#collapsed' => FALSE,  // Added
   );
   $form['settings']['domain'] = array(
     '#type' => 'fieldset',

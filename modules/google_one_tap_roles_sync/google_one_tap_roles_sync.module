@@ -6,7 +6,7 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
     drupal_set_message(t("Can't authenticate with google as library is missing check Status report or Readme for requirements"), 'error');
     return FALSE;
   }
-  $client = gauth_client_get('admin', TRUE);
+  $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   $service = new Google_Service_Directory($client);
   $result = $service->groups->listGroups(['domain' => variable_get('domain')]);
   $g_groups = $result->getGroups();
@@ -71,7 +71,7 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
 }
 
 function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
-  $client = gauth_client_get('admin', TRUE);
+  $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   $service = new Google_Service_Directory($client);
   $result = $service->groups->listGroups(['domain' => variable_get('domain')]);
   $g_groups = $result->getGroups();
@@ -81,11 +81,13 @@ function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
     $members = $group_members->getMembers();
     foreach ($members as $member) {
       if ($member->getEmail() == $edit['mail']) {
-        if ($role = variable_get('group_' . $group->getName())) {
-          if ($role != 'anonymous user' && $role != 'authenticated user') {
-            $role = user_role_load_by_name($role);
-            $edit['roles'][$role->rid] = $role;
-            break;
+        if ($g_role = variable_get('group_' . $group->getName())) {
+          if ($g_role != 'anonymous user' && $g_role != 'authenticated user') {
+            $role = user_role_load_by_name($g_role);
+            if ($edit['roles'][$role->rid] != $g_role) {
+              $edit['roles'][$role->rid] = $role->name;
+              break;
+            }
           }
         }
       }
