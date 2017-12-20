@@ -72,6 +72,7 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
  */
 function google_one_tap_roles_sync_submit_form($form, &$form_state) {
   $values = $form_state['values'];
+  // If we don't have enabled option use domain hide sync roles option.
   if ($values['use_domain'] == FALSE) {
     variable_set('sync_roles', FALSE);
   }
@@ -79,6 +80,7 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
     variable_set('sync_roles', $values['sync_roles']);
   }
 
+  // Go through each group and set selected Role.
   foreach ($values as $key => $value) {
     if (strpos($key, 'group_') === 0) {
       if (variable_get('sync_roles') == FALSE) {
@@ -95,35 +97,29 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
  * Implements hook_data_alter().
  */
 function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
-  // Get client.
-  $client = gauth_client_get(variable_get('gauth_name'), FALSE);
-  $service = new Google_Service_Directory($client);
-  // Load all groups.
-  $result = $service->groups->listGroups(['domain' => variable_get('domain_name')]);
-  $g_groups = $result->getGroups();
+  // If we are using option sync roles, sync them.
+  if (variable_get('sync_roles')) {
+    // Get client.
+    $client = gauth_client_get(variable_get('gauth_name'), FALSE);
+    $service = new Google_Service_Directory($client);
+    // Get all groups associated with user.
+    $result = $service->groups->listGroups(['domain' => variable_get('domain_name'), 'userKey' => $edit['mail']]);
+    $g_groups = $result->getGroups();
 
-  foreach ($g_groups as $group) {
-    // Get all members of this group.
-    $group_members = $service->members->listMembers($group->getId());
-    $members = $group_members->getMembers();
-    // Go trough each member in this group.
-    foreach ($members as $member) {
-      // Check if this member exist in group.
-      if ($member->getEmail() == $edit['mail']) {
-        // Check if we have set role for this group.
-        if ($g_role = variable_get('group_' . $group->getName())) {
-          // Check if role is not anonymous or authenticated,
-          // because authenticated is default variable which is getting added
-          // automatically.
-          if ($g_role != 'anonymous user' && $g_role != 'authenticated user') {
-            // Load role.
-            $role = user_role_load_by_name($g_role);
-            // Check if user doesn't have this role.
-            if ($edit['roles'][$role->rid] != $g_role) {
-              // Add role to user.
-              $edit['roles'][$role->rid] = $role->name;
-              break;
-            }
+    foreach ($g_groups as $group) {
+      // Check if we have set role for this group.
+      if ($group_role = variable_get('group_' . $group->getName())) {
+        // Check if role is not anonymous or authenticated,
+        // because authenticated is default variable which
+        // is getting added automatically.
+        if ($group_role !== 'anonymous user' && $group_role !== 'authenticated user') {
+          // Load role.
+          $role = user_role_load_by_name($group_role);
+          // Check if user doesn't have this role.
+          if ($edit['roles'][$role->rid] !== $group_role) {
+            // Add role to user.
+            $edit['roles'][$role->rid] = $role->name;
+            continue;
           }
         }
       }
