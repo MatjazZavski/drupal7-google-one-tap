@@ -8,16 +8,68 @@ function google_one_tap_preprocess_page(&$variables) {
   // login page or register page.
   if (!user_is_anonymous()) {
     return;
-  } elseif (!drupal_is_front_page() && (current_path() != 'user/login' && current_path() != 'user') && current_path() != 'user/register') {
-    return;
   }
   // Prevent login after user log's out.
-  if (!empty($_COOKIE['Drupal_visitor_user_logged_out'])) {
+  elseif (!empty($_COOKIE['Drupal_visitor_user_logged_out'])) {
     user_cookie_delete('user_logged_out');
     drupal_add_js(['logged_out' => 'true'], 'setting');
   }
-  // Add Google One Tap library, custom js and sent client id to custom JS.
+  // Check if we have any page restriction.
   else {
+    $allow = TRUE;
+    // Check if we have any page restriction.
+    if ($pages = variable_get('pages')) {
+      // Get current path.
+      $current_path = current_path();
+      // Go through each defined path.
+      foreach ($pages as $page) {
+        // Check if we have '*' in our path.
+        if (strpos($page, '*') !== FALSE) {
+          // Get full  path before '*'.
+          $url = strstr($page, '*', TRUE);
+          // If we are on the right path skip default_pages validation
+          // by setting $allow to FALSE.
+          if (strpos($current_path, $url) !== FALSE && variable_get('pages_option') == 'show') {
+            $allow = FALSE;
+            break;
+          }
+          else {
+            continue;
+          }
+        }
+        // If we are on the right path skip default_pages validation
+        // by setting $allow to FALSE.
+        elseif (array_search($current_path, $pages) !== FALSE && variable_get('pages_option') == 'show') {
+          $allow = FALSE;
+          break;
+        }
+      }
+    }
+    // Check default pages.
+    if ($allow) {
+      // Get default pages.
+      $default_pages = variable_get('default_pages');
+      // Go through each one.
+      foreach ($default_pages as $page) {
+        // If we are on front page and option is enabled break.
+        if ($default_pages['front'] && drupal_is_front_page()) {
+          break;
+        }
+        // If we are on the login page and option is enabled break.
+        elseif ($default_pages['login'] && (current_path() == 'user/login' || current_path() == 'user')) {
+          break;
+        }
+        // If we are on the register page and option is enabled break.
+        elseif ($default_pages['register'] && current_path() == 'user/register') {
+          break;
+        }
+        // If something wrong is added just return.
+        else {
+          return;
+        }
+      }
+    }
+    // Add Google One Tap library, custom js and sent client id to custom JS.
     $client = gauth_client_get(variable_get('gauth_name'), FALSE);
     drupal_add_js('https://smartlock.google.com/client', 'external');
     drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
@@ -62,19 +114,20 @@ function _google_one_tap_user_login() {
   // Check if we have function and valid token.
   $info = libraries_load('google-api-php-client');
   if (!$info['loaded']) {
-    drupal_set_message(t("Can't authenticate with google as library is missing check Status report or Readme for requirements"), 'error');
-
+    watchdog('Google One Tap', "Can't authenticate with google as library is missing check Status report or Readme for requirements", array(), WATCHDOG_ERROR);
     return FALSE;
   }
   if (!$token = $_POST['idToken']) {
-    throw new Exception('Missing idToken');
+    watchdog('Google One Tap', "Missing idToken", array(), WATCHDOG_ERROR);
+    return FALSE;
   }
 
   // Verify token.
   $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   $payload = $client->verifyIdToken($token);
   if (!$payload) {
-    throw new Exception('Invalid Token');
+    watchdog('Google One Tap', 'Invalid Token', array(), WATCHDOG_ERROR);
+    return FALSE;
   }
 
   // Checks if we are using option domain restriction.
@@ -88,13 +141,14 @@ function _google_one_tap_user_login() {
 
   // Throw exception for wrong email.
   if (empty($payload['email']) || !valid_email_address($payload['email'])) {
-    throw new Exception('Incorrect email address');
+    drupal_set_message(t('Incorrect email address'), 'error');
+    return NULL;
   }
 
   // If user doesn't exist create new one.
   if (!$user = user_load_by_mail($payload['email'])) {
     // Add notice.
-    watchdog(WATCHDOG_NOTICE, 'Registering a new user for &mail', ['%mail' => $payload['email']]);
+    watchdog('Google One Tap', 'Registering a new user for &mail', array('%mail' => $payload['email']), WATCHDOG_NOTICE);
     $edit = array(
       'name' => findNextAvailableAccountName($payload['name']),
       'mail' => $payload['email'],
@@ -104,7 +158,10 @@ function _google_one_tap_user_login() {
   }
   // If user is blocked throw exception.
   elseif (user_is_blocked($user->name)) {
-    throw new Exception('The user has not been activated or is blocked.');
+    drupal_set_message(t('The user has not been activated or is blocked.'), 'error');
+    watchdog('Google One Tap', 'User %user has not been activated or is blocked', array('%user' => $user->name), WATCHDOG_ERROR);
+    user_cookie_save(['user_logged_out' => TRUE]);
+    return NULL;
   }
   // If we have user decode std class to array.
   else {
@@ -133,10 +190,16 @@ function google_one_tap_settings_form($form, &$form_state) {
   $query->fields('ga');
   $result = $query->execute()->fetchAll();
 
-  $options = array();
-  $options[''] = t('Select a user');
-  foreach ($result as $item) {
-    $options[$item->id] = $item->name;
+  if (!empty($result)) {
+    $options = [];
+    $options[''] = t('Select a user');
+    foreach ($result as $item) {
+      $options[$item->id] = $item->name;
+    }
+  }
+  else {
+    $options[''] = '- No accounts -';
+    form_set_error('gauth_name', t('You have no accounts created in gauth module. Please create one and choose account below to continue.'));
   }
   $form['settings'] = array(
     '#type' => 'fieldset',
@@ -178,6 +241,41 @@ function google_one_tap_settings_form($form, &$form_state) {
       ),
     ),
   );
+  $form['settings']['pages_fieldset'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Pages'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  $options = [
+    'front' => t('Show on the front page'),
+    'login' => t('Show on the login page'),
+    'register' => t('Show on the register page'),
+  ];
+  $form['settings']['pages_fieldset']['default_pages'] = [
+    '#type' => 'checkboxes',
+    '#options' => $options,
+    '#default_value' => variable_get('default_pages', [
+      'front',
+      'login',
+      'register',
+    ]),
+  ];
+  $form['settings']['pages_fieldset']['pages'] = [
+    '#type' => 'textarea',
+    '#title' => 'Pages',
+    '#default_value' => variable_get('form_element_pages'),
+    '#description' => t("Specify pages by using their paths. Enter one path per line. The '*' character is a wildcard. Example paths are blog for the blog page and blog/* for every personal blog."),
+  ];
+  $options = [
+    'show' => t('Show for the listed pages'),
+    'hide' => t('Hide for the listed pages'),
+  ];
+  $form['settings']['pages_fieldset']['pages_option'] = [
+    '#type' => 'radios',
+    '#options' => $options,
+    '#default_value' => variable_get('pages_option') ?: 'show',
+  ];
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Save configuration'),
@@ -201,15 +299,28 @@ function google_one_tap_settings_validate($form, &$form_state) {
  * Implements hook_FORM_ID_submit().
  */
 function google_one_tap_settings_submit($form, &$form_state) {
+  $values = $form_state['values'];
   // If have disabled domain restriction reset domain name.
-  if ($form_state['values']['use_domain'] == FALSE && !empty($form_state['values']['domain_name'])) {
+  if ($values['use_domain'] == FALSE && !empty($values['domain_name'])) {
     variable_del('domain_name');
-    variable_set('use_domain', $form_state['values']['use_domain']);
-  } else {
-    variable_set('domain_name', $form_state['values']['domain_name']);
-    variable_set('use_domain', $form_state['values']['use_domain']);
+    variable_set('use_domain', $values['use_domain']);
   }
-  variable_set('gauth_name', $form_state['values']['gauth_name']);
+  else {
+    variable_set('domain_name', $values['domain_name']);
+    variable_set('use_domain', $values['use_domain']);
+  }
+
+  if (!empty($values['pages'])) {
+    $pages = preg_split("/\\r\\n|\\r|\\n/", $values['pages']);
+  }
+  else {
+    $pages = '';
+  }
+  variable_set('default_pages', $values['default_pages']);
+  variable_set('form_element_pages', $values['pages']);
+  variable_set('pages', $pages);
+  variable_set('pages_option', $values['pages_option']);
+  variable_set('gauth_name', $values['gauth_name']);
   drupal_set_message(t('The configuration options have been saved.'));
 }
 
