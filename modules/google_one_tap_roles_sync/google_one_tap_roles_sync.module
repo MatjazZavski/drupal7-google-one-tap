@@ -32,6 +32,18 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
       ),
     ),
   );
+  $form['settings']['domain']['g_suite_priority'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Keep G Suite roles in sync'),
+    '#default_value' => variable_get('g_suite_priority', FALSE),
+    '#description' => t('Use this option when you want to make priority on G suite. (When role in G Suite is removed, role in Drupal will be removed)'),
+    '#states' => array(
+      'visible' => array(
+        ':input[name="sync_roles"]' => array('checked' => TRUE),
+        ':input[name="use_domain"]' => array('checked' => TRUE),
+      ),
+    ),
+  );
   $form['settings']['domain']['roles_fieldset'] = array(
     '#type' => 'fieldset',
     '#title' => t('Roles'),
@@ -75,9 +87,11 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
   // If we don't have enabled option use domain hide sync roles option.
   if ($values['use_domain'] == FALSE) {
     variable_set('sync_roles', FALSE);
+    variable_set('g_suite_priority', FALSE);
   }
   else {
     variable_set('sync_roles', $values['sync_roles']);
+    variable_set('g_suite_priority', $values['g_suite_priority']);
   }
 
   // Go through each group and set selected Role.
@@ -106,11 +120,15 @@ function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
     $result = $service->groups->listGroups(['domain' => variable_get('domain_name'), 'userKey' => $edit['mail']]);
     $g_groups = $result->getGroups();
 
+    $group_roles = array();
+
+    // Add role to user.
     foreach ($g_groups as $group) {
       // Check if we have set role for this group.
       if ($group_role = variable_get('group_' . $group->getName())) {
+        $group_roles[] = $group_role;
         // Check if role is not anonymous or authenticated,
-        // because authenticated is default variable which
+        // because authenticated is default role which
         // is getting added automatically.
         if ($group_role !== 'anonymous user' && $group_role !== 'authenticated user') {
           // Load role.
@@ -119,8 +137,21 @@ function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
           if ($edit['roles'][$role->rid] !== $group_role) {
             // Add role to user.
             $edit['roles'][$role->rid] = $role->name;
+            variable_set('user_role_' . $role->rid, $role->rid);
             continue;
           }
+        }
+      }
+    }
+    // Remove role from user in Drupal if role is not set
+    // in G Suite for this group.
+    if (!empty($group_roles) && variable_get('g_suite_priority')) {
+      foreach ($edit['roles'] as $key => $user_role) {
+        // Check if user role is in G Suite if not remove it.
+        if (array_search($user_role, $group_roles) === FALSE && ($user_role !== 'anonymous user' && $user_role !== 'authenticated user') && variable_get('user_role_' . $key)) {
+          // Remove role from user.
+          variable_del('user_role_' . $key);
+          unset($edit['roles'][$key]);
         }
       }
     }
