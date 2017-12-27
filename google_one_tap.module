@@ -8,7 +8,7 @@ function google_one_tap_preprocess_page(&$variables) {
   // login page or register page.
   if (!user_is_anonymous()) {
     return;
-  } elseif (!drupal_is_front_page() && current_path() != 'user/login' && current_path() != 'user/registration') {
+  } elseif (!drupal_is_front_page() && (current_path() != 'user/login' && current_path() != 'user') && current_path() != 'user/register') {
     return;
   }
   // Prevent login after user log's out.
