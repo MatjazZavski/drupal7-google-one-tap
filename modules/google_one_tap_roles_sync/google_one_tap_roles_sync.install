@@ -1,0 +1,24 @@
+<?php
+
+/**
+ * @file
+ * Install and uninstall functions for the Google One Tap Roles Sync module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function google_one_tap_roles_sync_install() {
+  variable_set('sync_roles', FALSE);
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function google_one_tap_roles_sync_uninstall() {
+  variable_del('sync_roles');
+  $results = db_query("SELECT name FROM variable WHERE name LIKE 'group_%'")->fetchAllKeyed();
+  foreach ($results as $key => $result) {
+    variable_del($key);
+  }
+}

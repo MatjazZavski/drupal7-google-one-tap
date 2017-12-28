@@ -14,7 +14,7 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
   // Get all groups.
   $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   $service = new Google_Service_Directory($client);
-  $result = $service->groups->listGroups(['domain' => variable_get('domain_name')]);
+  $result = $service->groups->listGroups(['domain' => /*variable_get('domain_name')*/'agiledrop.com']);
   $g_groups = $result->getGroups();
   $groups = [];
   foreach ($g_groups as $group) {
