@@ -256,9 +256,9 @@ function google_one_tap_settings_form($form, &$form_state) {
     '#type' => 'checkboxes',
     '#options' => $options,
     '#default_value' => variable_get('default_pages', [
-      'front',
-      'login',
-      'register',
+      'front' => 'front',
+      'login' => 'login',
+      'register' => 'register',
     ]),
   ];
   $form['settings']['pages_fieldset']['pages'] = [

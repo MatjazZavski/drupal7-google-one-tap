@@ -1,0 +1,34 @@
+<?php
+
+/**
+ * @file
+ * Install and uninstall functions for the Google One Tap module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function google_one_tap_install() {
+  variable_set('gauth_name', '');
+  variable_set('use_domain', FALSE);
+  variable_set('domain_name', '');
+  variable_set('default_pages', [
+    'front' => 'front',
+    'login' => 'login',
+    'register' => 'register',
+  ]);
+  variable_set('form_element_pages', '');
+  variable_set('pages_option', 'show');
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function google_one_tap_uninstall() {
+  variable_del('gauth_name');
+  variable_del('use_domain');
+  variable_del('domain_name');
+  variable_del('default_pages');
+  variable_del('form_element_pages');
+  variable_del('pages_option');
+}
