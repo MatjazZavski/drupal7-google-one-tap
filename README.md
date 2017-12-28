@@ -10,7 +10,7 @@
     For more information go to gauth module and check README.txt section GOOGLE CONFIGURATION
 
 3. Go to https://console.developers.google.com/apis/library?project=your_project and enable Admin SDK
-4. Follow guide in gauth module Readme.txt
-5. Enable Google Directory service in gauth admin configuration.
+4. Create new gauth account ?q=admin/config/services/gauth_account/add
+5. Enable Google Directory and Google OAuth2 service in gauth admin configuration.
 6. Go to ?q=admin/config/services/google_one_tap and choose gauth user.
 7. If you go to the login, register or front page and if you are not logged in there should be visible google login popup.
