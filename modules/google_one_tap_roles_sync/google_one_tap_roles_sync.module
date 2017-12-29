@@ -20,7 +20,7 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
     '#type' => 'checkbox',
     '#title' => t('Sync roles'),
     '#default_value' => variable_get('sync_roles', FALSE),
-    '#description' => t('Use this option if you want to sync roles from Google into Drupal.'),
+    '#description' => t('Use this option if you want to sync roles from Google into Drupal, please provide a valid G Suite domain.'),
     '#states' => array(
       'visible' => array(
         ':input[name="use_domain"]' => array('checked' => TRUE),
