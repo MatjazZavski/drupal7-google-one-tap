@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Main functionality for roles sync.
+ */
+
+/**
  * Implements hook_FROM_ID_alter().
  */
 function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$form, &$form_state, $form_id) {
@@ -10,17 +15,7 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
     drupal_set_message(t("Can't authenticate with google as library is missing check Status report or Readme for requirements"), 'error');
     return FALSE;
   }
-
-  // Get all groups.
-  $client = gauth_client_get(variable_get('gauth_name'), FALSE);
-  $service = new Google_Service_Directory($client);
-  $result = $service->groups->listGroups(['domain' => /*variable_get('domain_name')*/'agiledrop.com']);
-  $g_groups = $result->getGroups();
-  $groups = [];
-  foreach ($g_groups as $group) {
-    $groups[$group->getName()] = $group->getName();
-  }
-
+  // Set form element sync roles checkbox.
   $form['settings']['domain']['sync_roles'] = array(
     '#type' => 'checkbox',
     '#title' => t('Sync roles'),
@@ -32,38 +27,63 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
       ),
     ),
   );
-  $form['settings']['domain']['roles_fieldset'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Roles'),
-    '#description' => t('In select field are displayed roles from Drupal, in label is displayed group from Google.'),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-    '#states' => array(
-      'visible' => array(
-        ':input[name="sync_roles"]' => array('checked' => TRUE),
-        ':input[name="use_domain"]' => array('checked' => TRUE),
+  // Check if domain and auth user is set.
+  if (variable_get('domain_name') && variable_get('gauth_name')) {
+    // Get client and set service.
+    $client = gauth_client_get(variable_get('gauth_name'), FALSE);
+    $service = new Google_Service_Directory($client);
+    // Get all groups.
+    $result = $service->groups->listGroups(['domain' => variable_get('domain_name')]);
+    $g_groups = $result->getGroups();
+    // Go through each group.
+    $groups = [];
+    foreach ($g_groups as $group) {
+      // All characters bust be lower case and replace spaces with '_'.
+      $name = str_replace(' ', '_', strtolower($group->getName()));
+      // Save to array.
+      $groups['group_' . $name] = $group->getName();
+    }
+    // Set Fieldset for roles.
+    $form['settings']['domain']['roles_fieldset'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Roles'),
+      '#description' => t('In select field are displayed roles from Drupal, in label is displayed group from Google.'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#states' => array(
+        'visible' => array(
+          ':input[name="sync_roles"]' => array('checked' => TRUE),
+          ':input[name="use_domain"]' => array('checked' => TRUE),
+        ),
       ),
-    ),
-  );
-
-  // Get all roles.
-  $roles = user_roles();
-  $options = array();
-  foreach ($roles as $role) {
-    if ($role != 'anonymous user') {
-      $options[$role] = $role;
+    );
+    // Get all roles.
+    $roles = user_roles();
+    $options = array();
+    // Go through each role and save it to array if is not anonymous.
+    foreach ($roles as $role) {
+      if ($role != 'anonymous user') {
+        $role = user_role_load_by_name($role);
+        $options[$role->rid] = $role->name;
+      }
+    }
+    // Check if we actually have any groups in G Suite.
+    if (!empty($groups)) {
+      // Go through each group.
+      foreach ($groups as $key => $group) {
+        // If we already defined roles for each group set them as default.
+        $google_groups = variable_get('google_groups');
+        $searched = $google_groups[$key] ?: NULL;
+        $form['settings']['domain']['roles_fieldset'][$key] = array(
+          '#type' => 'select',
+          '#title' => $group,
+          '#default_value' => $searched,
+          '#options' => $options,
+        );
+      }
     }
   }
-  if (!empty($groups)) {
-    foreach ($groups as $group) {
-      $form['settings']['domain']['roles_fieldset']['group_' . $group] = array(
-        '#type' => 'select',
-        '#title' => $group,
-        '#default_value' => variable_get('group_' . $group, ''),
-        '#options' => $options,
-      );
-    }
-  }
+  // Custom submit handler.
   $form['#submit'][] = 'google_one_tap_roles_sync_submit_form';
 }
 
@@ -80,17 +100,21 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
     variable_set('sync_roles', $values['sync_roles']);
   }
 
-  // Go through each group and set selected Role.
+  $groups = array();
+  // Go through each group.
   foreach ($values as $key => $value) {
+    // If key of array $values starts with group_ save to array.
     if (strpos($key, 'group_') === 0) {
       if (variable_get('sync_roles') == FALSE) {
-        variable_set($key, '');
+        continue;
       }
       else {
-        variable_set($key, $value);
+        $groups[$key] = $value;
       }
     }
   }
+  // Save it to our database under array google_groups.
+  variable_set('google_groups', $groups);
 }
 
 /**
@@ -98,46 +122,64 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
  */
 function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
   // If we are using option sync roles, sync them.
-  if (variable_get('sync_roles')) {
-    // Get client.
+  if (variable_get('sync_roles') && variable_get('domain_name')) {
+    // Get client and set service.
     $client = gauth_client_get(variable_get('gauth_name'), FALSE);
     $service = new Google_Service_Directory($client);
     // Get all groups associated with user.
     $result = $service->groups->listGroups(['domain' => variable_get('domain_name'), 'userKey' => $edit['mail']]);
     $g_groups = $result->getGroups();
 
-    $group_roles = array();
-
-    // Add role to user.
+    // Go through each role and add to account if its assigned to the user.
+    $google_roles = [];
     foreach ($g_groups as $group) {
+      // All characters bust be lower case and replace spaces with '_'.
+      $name = str_replace(' ', '_', strtolower('group_' . $group->getName()));
+      $saved_groups = variable_get('google_groups');
       // Check if we have set role for this group.
-      if ($group_role = variable_get('group_' . $group->getName())) {
-        $group_roles[] = $group_role;
+      if ($searched = $saved_groups[$name]) {
+        // Get role and save it to array for later use.
+        $role = user_role_load($searched);
+        $google_roles[] = $role->name;
         // Check if role is not anonymous or authenticated,
         // because authenticated is default role which
         // is getting added automatically.
-        if ($group_role !== 'anonymous user' && $group_role !== 'authenticated user') {
-          // Load role.
-          $role = user_role_load_by_name($group_role);
+        if ($role->name !== 'anonymous user' && $role->name !== 'authenticated user') {
           // Check if user doesn't have this role.
-          if ($edit['roles'][$role->rid] !== $group_role) {
+          if ($edit['roles'][$role->rid] !== $role->name) {
             // Add role to user.
             $edit['roles'][$role->rid] = $role->name;
-            variable_set('user_role_' . $role->rid, $role->rid);
             continue;
           }
         }
       }
     }
-    // Remove role from user in Drupal if role is not set
-    // in G Suite for this group.
-    if (!empty($group_roles)) {
-      foreach ($edit['roles'] as $key => $user_role) {
-        // Check if user role is in G Suite if not remove it.
-        if (array_search($user_role, $group_roles) === FALSE && ($user_role !== 'anonymous user' && $user_role !== 'authenticated user') && variable_get('user_role_' . $key)) {
-          // Remove role from user.
-          variable_del('user_role_' . $key);
-          unset($edit['roles'][$key]);
+    // Check if we have any G Suite roles.
+    if (!empty($google_roles)) {
+      // Get all roles we defined in the UI.
+      $google_groups = variable_get('google_groups');
+      $config_defined_roles = [];
+      foreach ($google_groups as $rid) {
+        $role = user_role_load($rid);
+        if ($role->name !== 'anonymous user' && $role->name !== 'authenticated user') {
+          $config_defined_roles[$role->rid] = $role->name;
+        }
+      }
+      $mapped_roles = array();
+      // User roles from Google.
+      foreach ($google_roles as $role) {
+        if (array_search($role, $config_defined_roles) !== FALSE) {
+          $mapped_roles[] = $role;
+        }
+      }
+
+      // Get all roles from user.
+      // Get all google roles.
+      foreach ($edit['roles'] as $rid => $role_name) {
+        if (array_search($role_name, $config_defined_roles) !== FALSE) {
+          if (array_search($role_name, $mapped_roles) === FALSE) {
+            unset($edit['roles'][$rid]);
+          }
         }
       }
     }

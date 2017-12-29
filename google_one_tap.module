@@ -1,6 +1,11 @@
 <?php
 
 /**
+ * @file
+ * Google One Tap .module file.
+ */
+
+/**
  * Implements hook_preprocess_page().
  */
 function google_one_tap_preprocess_page(&$variables) {
