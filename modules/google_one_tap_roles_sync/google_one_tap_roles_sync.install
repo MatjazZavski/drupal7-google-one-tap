@@ -17,8 +17,5 @@ function google_one_tap_roles_sync_install() {
  */
 function google_one_tap_roles_sync_uninstall() {
   variable_del('sync_roles');
-  $results = db_query("SELECT name FROM variable WHERE name LIKE 'group_%'")->fetchAllKeyed();
-  foreach ($results as $key => $result) {
-    variable_del($key);
-  }
+  variable_del('google_groups');
 }
