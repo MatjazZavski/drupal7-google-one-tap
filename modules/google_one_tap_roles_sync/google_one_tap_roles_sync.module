@@ -60,9 +60,10 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
     // Get all roles.
     $roles = user_roles();
     $options = array();
+    $options[''] = t('- None -');
     // Go through each role and save it to array if is not anonymous.
     foreach ($roles as $role) {
-      if ($role != 'anonymous user') {
+      if ($role != 'anonymous user' && $role != 'authenticated user') {
         $role = user_role_load_by_name($role);
         $options[$role->rid] = $role->name;
       }
