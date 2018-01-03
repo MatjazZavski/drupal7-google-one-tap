@@ -28,23 +28,34 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
     ),
     '#ajax' => array(
       'callback' => '_google_one_tap_groups_form_element',
-      'wrapper' => 'options',
-      'method' => 'replace',
-      'effect' => 'fade',
+      'wrapper' => 'checkboxes-div',
     ),
   );
+  if (isset($form_state['values']['sync_roles'])) {
+    if ($form_state['values']['sync_roles'] == FALSE) {
+      $class = 'element-hidden';
+    }
+    else {
+      $class = '';
+    }
+  }
+  elseif (variable_get('sync_roles') == FALSE) {
+    $class = 'element-hidden';
+  }
+  else {
+    $class = '';
+  }
   $form['settings']['domain']['roles_fieldset'] = array(
     '#type' => 'fieldset',
     '#title' => t('Roles'),
     '#description' => t('In select field are displayed roles from Drupal, in label is displayed group from Google.'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
-    '#states' => array(
-      'visible' => array(
-        ':input[name="sync_roles"]' => array('checked' => TRUE),
-        ':input[name="use_domain"]' => array('checked' => TRUE),
-      ),
+    '#attributes' => array(
+      'class' => array($class),
     ),
+    '#prefix' => '<div id="checkboxes-div">',
+    '#suffix' => '</div>',
   );
 
   $domain_name = isset($form_state['values']['domain_name']) ? $form_state['values']['domain_name'] : variable_get('domain_name');
@@ -78,19 +89,22 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
     }
     // Check if we actually have any groups in G Suite.
     if (!empty($groups)) {
+      $google_groups = variable_get('google_groups');
       // Go through each group.
       foreach ($groups as $key => $group) {
         // If we already defined roles for each group set them as default.
-        $google_groups = variable_get('google_groups');
-        $searched = $google_groups[$key] ?: NULL;
+        if (!empty($google_groups)) {
+          $searched = $google_groups[$key] ?: '';
+        } else {
+          $searched = '';
+        }
         $form['settings']['domain']['roles_fieldset'][$key] = array(
           '#type' => 'select',
           '#title' => $group,
           '#default_value' => $searched,
           '#options' => $options,
-          '#prefix' => '<div class="options">',
-          '#suffix' => '</div>',
         );
+
       }
     }
   }
@@ -120,7 +134,7 @@ function google_one_tap_roles_sync_submit_form($form, &$form_state) {
   $values = $form_state['values'];
   // If we don't have enabled option use domain hide sync roles option.
   if ($values['use_domain'] == FALSE) {
-    variable_set('sync_roles', FALSE);
+    variable_set('sync_roles', 0);
   }
   else {
     variable_set('sync_roles', $values['sync_roles']);
