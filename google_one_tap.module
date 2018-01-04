@@ -9,6 +9,10 @@
  * Implements hook_preprocess_page().
  */
 function google_one_tap_preprocess_page(&$variables) {
+  if(variable_get('gauth_name', FALSE) == FALSE) {
+    drupal_set_message(t('You have to choose GAuth user in Google One Tap Settings.'), 'warning');
+    return;
+  }
   // Return if user is anonymous, not on the front page,
   // login page or register page.
   if (!user_is_anonymous()) {
