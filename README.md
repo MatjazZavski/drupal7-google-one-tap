@@ -18,15 +18,10 @@
 ----------------------------
 Problem with syncing roles:
 
-You can't choose which roles you want to sync if you don't save form first.
-
-Use patch below to fix this issue.
+Use this patch.
 
 - Roles sync module uses form states and ajax because there is an error thrown and is core issue you need to apply patch from bellow 
 https://www.drupal.org/project/drupal/issues/1091852#comment-10390515
 
- Another way to use this module is to fill details you want in form and then press submit. 
-After that you can actually choose which roles you want to sync.
-
-This module does not work anymore on the latest Chrome version.
+This module/library doesn't work on Chrome unless you have ssl enabled for your site.
 To fix this check out this link: https://stackoverflow.com/questions/47990565/latest-version-of-chrome-63-0-is-not-supported-in-library-google-one-tap?noredirect=1#comment83001266_47990565
