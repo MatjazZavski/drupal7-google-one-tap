@@ -13,77 +13,77 @@ function google_one_tap_preprocess_page(&$variables) {
     drupal_set_message(t('You have to choose GAuth user in Google One Tap Settings.'), 'warning');
     return;
   }
-  // Return if user is anonymous, not on the front page,
-  // login page or register page.
+
   if (!user_is_anonymous()) {
     return;
   }
-  // Prevent login after user log's out.
-  elseif (!empty($_COOKIE['Drupal_visitor_user_logged_out'])) {
-    user_cookie_delete('user_logged_out');
-    drupal_add_js(['logged_out' => 'true'], 'setting');
-  }
+
+  $allow = TRUE;
   // Check if we have any page restriction.
-  else {
-    $allow = TRUE;
-    // Check if we have any page restriction.
-    if ($pages = variable_get('pages')) {
-      // Get current path.
-      $current_path = current_path();
-      // Go through each defined path.
-      foreach ($pages as $page) {
-        // Check if we have '*' in our path.
-        if (strpos($page, '*') !== FALSE) {
-          // Get full  path before '*'.
-          $url = strstr($page, '*', TRUE);
-          // If we are on the right path skip default_pages validation
-          // by setting $allow to FALSE.
-          if (strpos($current_path, $url) !== FALSE && variable_get('pages_option') == 'show') {
-            $allow = FALSE;
-            break;
-          }
-          else {
-            continue;
-          }
-        }
+  if ($pages = variable_get('pages')) {
+    // Get current path.
+    $current_path = current_path();
+    // Go through each defined path.
+    foreach ($pages as $page) {
+      // Check if we have '*' in our path.
+      if (strpos($page, '*') !== FALSE) {
+        // Get full  path before '*'.
+        $url = strstr($page, '*', TRUE);
         // If we are on the right path skip default_pages validation
         // by setting $allow to FALSE.
-        elseif (array_search($current_path, $pages) !== FALSE && variable_get('pages_option') == 'show') {
+        if (strpos($current_path, $url) !== FALSE && variable_get('pages_option') == 'show') {
           $allow = FALSE;
           break;
+        } else {
+          continue;
         }
       }
-    }
-    // Check default pages.
-    if ($allow) {
-      // Get default pages.
-      $default_pages = variable_get('default_pages');
-      // Go through each one.
-      foreach ($default_pages as $page) {
-        // If we are on front page and option is enabled break.
-        if ($default_pages['front'] && drupal_is_front_page()) {
-          break;
-        }
-        // If we are on the login page and option is enabled break.
-        elseif ($default_pages['login'] && (current_path() == 'user/login' || current_path() == 'user')) {
-          break;
-        }
-        // If we are on the register page and option is enabled break.
-        elseif ($default_pages['register'] && current_path() == 'user/register') {
-          break;
-        }
-        // If something wrong is added just return.
-        else {
-          return;
-        }
+      // If we are on the right path skip default_pages validation
+      // by setting $allow to FALSE.
+      elseif (array_search($current_path, $pages) !== FALSE && variable_get('pages_option') == 'show') {
+        $allow = FALSE;
+        break;
       }
     }
-    // Add Google One Tap library, custom js and sent client id to custom JS.
-    $client = gauth_client_get(variable_get('gauth_name'), FALSE);
-    drupal_add_js('https://smartlock.google.com/client', 'external');
-    drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
-    drupal_add_js(['client_id' => $client->getClientId()], 'setting');
   }
+  // Check default pages.
+  if ($allow) {
+    // Get default pages.
+    $default_pages = variable_get('default_pages');
+    // Go through each one.
+    foreach ($default_pages as $page) {
+      // If we are on front page and option is enabled break.
+      if ($default_pages['front'] && drupal_is_front_page()) {
+        break;
+      } // If we are on the login page and option is enabled break.
+      elseif ($default_pages['login'] && (current_path() == 'user/login' || current_path() == 'user')) {
+        break;
+      } // If we are on the register page and option is enabled break.
+      elseif ($default_pages['register'] && current_path() == 'user/register') {
+        break;
+      } // If something wrong is added just return.
+      else {
+        return;
+      }
+    }
+  }
+  // Add Google One Tap library, custom js and sent client id to custom JS.
+  $client = gauth_client_get(variable_get('gauth_name'), FALSE);
+  drupal_add_library('system', 'jquery.cookie');
+  drupal_add_js('https://smartlock.google.com/client', 'external');
+  drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
+  //drupal_add_js(['client_id' => $client->getClientId()], 'setting');
+  drupal_add_js([
+                  'google_one_tap' => [
+                    "supportedAuthMethods"         => [
+                      "https://accounts.google.com",
+                    ], "supportedIdTokenProviders" => [
+                      [
+                        "uri" => "https://accounts.google.com", "clientId" => $client->getClientId(),
+                      ],
+                    ],
+                  ],
+                ], 'setting');
 }
 
 /**
@@ -370,6 +370,9 @@ function accountNameIsRegistered($name) {
  * Implements hook_user_logout().
  */
 function google_one_tap_user_logout($account) {
-  // When user log's out set cookie.
-  user_cookie_save(['user_logged_out' => TRUE]);
+  $cookie_name = "user_logged_out";
+  $cookie_value = TRUE;
+  setcookie($cookie_name, $cookie_value, time() + (86400 * 30), "/");
+  //drupal_add_js(['logged_out' => 'true'], 'setting');
+  //user_cookie_save(['user_loggesd_out' => TRUE]);
 }
