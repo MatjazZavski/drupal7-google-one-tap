@@ -5,23 +5,31 @@
 
 (function ($, Drupal) {
 
-  'use strict';
-
   /**
    * Behavior description.
    */
   Drupal.behaviors.googleOneTap = {
     attach: function (context, settings) {
-      // The 'googleyolo' object is ready for use.
       window.onGoogleYoloLoad = (googleyolo) => {
-        console.log('i ran');
         if ($.cookie('user_logged_out') !== null) {
           $.cookie('user_logged_out', null, {path:'/'});
           return;
         }
         else {
+          // The 'googleyolo' object is ready for use.
           googleyolo
-          .retrieve(settings['google_one_tap'])
+          .hint({
+            supportedAuthMethods: [
+              "https://accounts.google.com",
+              "googleyolo://id-and-password"
+            ],
+            supportedIdTokenProviders: [
+              {
+                uri: "https://accounts.google.com",
+                clientId: settings['client_id']
+              }
+            ]
+          })
           .then(
             (credential) => {
             $.ajax({
@@ -40,9 +48,9 @@
         },
           (error) => { console.log(error.type); }
         );
-        }
-
+        };
       }
     }
   };
+
 } (jQuery, Drupal));
