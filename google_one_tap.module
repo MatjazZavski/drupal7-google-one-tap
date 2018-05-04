@@ -67,11 +67,15 @@ function google_one_tap_preprocess_page(&$variables) {
       }
     }
   }
+  drupal_set_message('google one tap runned', 'info');
   // Add Google One Tap library, custom js and sent client id to custom JS.
   $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   drupal_add_library('system', 'jquery.cookie');
+  drupal_set_message('Added cookie library', 'info');
   drupal_add_js('https://smartlock.google.com/client', 'external');
+  drupal_set_message('Added smart lock library', 'info');
   drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
+  drupal_set_message('Added google one tap js library', 'info');
   drupal_add_js(['client_id' => $client->getClientId()], 'setting');
 }
 
