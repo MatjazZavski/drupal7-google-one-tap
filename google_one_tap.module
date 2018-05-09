@@ -9,17 +9,14 @@
  * Implements hook_preprocess_page().
  */
 function google_one_tap_preprocess_html(&$variables) {
-  drupal_set_message('google one tap runned before everyting', 'info');
   if(variable_get('gauth_name', FALSE) == FALSE && path_is_admin(current_path())) {
     drupal_set_message(t('You have to choose GAuth user in Google One Tap Settings.'), 'warning');
     return;
   }
-  drupal_set_message('google one tap runned before second condition', 'info');
   if (!user_is_anonymous()) {
     return;
   }
   
-  drupal_set_message('google one tap runned before condition for optional pages', 'info');
   $allow = TRUE;
   // Check if we have any page restriction.
   if ($pages = variable_get('pages')) {
@@ -37,7 +34,6 @@ function google_one_tap_preprocess_html(&$variables) {
           $allow = FALSE;
           break;
         } else {
-          drupal_set_message('google one tap runned before continue', 'info');
           continue;
         }
       }
@@ -49,7 +45,6 @@ function google_one_tap_preprocess_html(&$variables) {
       }
     }
   }
-    drupal_set_message('google one tap runned before condition for default pages', 'info');
   // Check default pages.
   if ($allow) {
     // Get default pages.
@@ -67,20 +62,15 @@ function google_one_tap_preprocess_html(&$variables) {
         break;
       } // If something wrong is added just return.
       else {
-        drupal_set_message('google one tap runned in before return', 'info');
         return;
       }
     }
   }
-  drupal_set_message('google one tap runned', 'info');
   // Add Google One Tap library, custom js and sent client id to custom JS.
   $client = gauth_client_get(variable_get('gauth_name'), FALSE);
   drupal_add_library('system', 'jquery.cookie');
-  drupal_set_message('Added cookie library', 'info');
   drupal_add_js('https://smartlock.google.com/client', 'external');
-  drupal_set_message('Added smart lock library', 'info');
   drupal_add_js(drupal_get_path('module', 'google_one_tap') . '/google-one-tap.js');
-  drupal_set_message('Added google one tap js library', 'info');
   drupal_add_js(['client_id' => $client->getClientId()], 'setting');
 }
 
