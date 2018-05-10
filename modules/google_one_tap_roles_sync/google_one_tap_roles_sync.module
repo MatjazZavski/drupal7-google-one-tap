@@ -167,61 +167,80 @@ function google_one_tap_roles_sync_google_one_tap_new_user_alter(&$edit) {
     $client = gauth_client_get(variable_get('gauth_name'), FALSE);
     $service = new Google_Service_Directory($client);
     // Get all groups associated with user.
-    $result = $service->groups->listGroups(['domain' => variable_get('domain_name'), 'userKey' => $edit['mail']]);
-    $g_groups = $result->getGroups();
-
-    // Go through each role and add to account if its assigned to the user.
-    $google_roles = [];
-    foreach ($g_groups as $group) {
-      // All characters bust be lower case and replace spaces with '_'.
-      $name = str_replace(' ', '_', strtolower('group_' . $group->getName()));
-      $saved_groups = variable_get('google_groups');
-      // Check if we have set role for this group.
-      if ($searched = $saved_groups[$name]) {
-        // Get role and save it to array for later use.
-        $role = user_role_load($searched);
-        $google_roles[] = $role->name;
-        // Check if role is not anonymous or authenticated,
-        // because authenticated is default role which
-        // is getting added automatically.
-        if ($role->name !== 'anonymous user' && $role->name !== 'authenticated user') {
-          // Check if user doesn't have this role.
-          if ($edit['roles'][$role->rid] !== $role->name) {
-            // Add role to user.
-            $edit['roles'][$role->rid] = $role->name;
-            continue;
-          }
-        }
-      }
-    }
-    // Check if we have any G Suite roles.
-    if (!empty($google_roles)) {
-      // Get all roles we defined in the UI.
-      $google_groups = variable_get('google_groups');
-      $config_defined_roles = [];
-      foreach ($google_groups as $rid) {
-        $role = user_role_load($rid);
-        if ($role->name !== 'anonymous user' && $role->name !== 'authenticated user') {
-          $config_defined_roles[$role->rid] = $role->name;
-        }
-      }
-      $mapped_roles = array();
-      // User roles from Google.
-      foreach ($google_roles as $role) {
-        if (array_search($role, $config_defined_roles) !== FALSE) {
-          $mapped_roles[] = $role;
+    $users = $service->users->listUsers(['customer' => 'my_customer', 'domain' => variable_get('domain_name'), 'maxResults' => 500])->getUsers();
+    if (!empty($users)) {
+      foreach ($users as $user) {
+        $email = $user->getPrimaryEmail();
+        if ($email == $edit['mail']) {
+          $new_user = $user;
+          break;
+        } else {
+          continue;
         }
       }
 
-      // Get all roles from user.
-      // Get all google roles.
-      foreach ($edit['roles'] as $rid => $role_name) {
-        if (array_search($role_name, $config_defined_roles) !== FALSE) {
-          if (array_search($role_name, $mapped_roles) === FALSE) {
-            unset($edit['roles'][$rid]);
+      if (isset($new_user)) {
+        $user = $new_user;
+        $roles = $service->roleAssignments->listRoleAssignments($user->getCustomerId(), ['userKey' => $user->getId()])->getItems();
+        if (!empty($roles)) {
+          foreach ($roles as $role) {
+            $role = $service->roles->get($user->getCustomerId(), $role->getRoleId());
+            $edit = _google_one_tap_check_google_role($role, $edit);
           }
         }
       }
     }
   }
+}
+
+function _google_one_tap_check_google_role($group, array $edit) {
+  // All characters bust be lower case and replace spaces with '_'.
+  $name = str_replace(' ', '_', strtolower('group_' . $group->getRoleName()));
+  $saved_groups = variable_get('google_groups');
+  // Check if we have set role for this group.
+  if ($searched = $saved_groups[$name]) {
+    // Get role and save it to array for later use.
+    $role = user_role_load($searched);
+    $google_roles[] = $role->name;
+    // Check if role is not anonymous or authenticated,
+    // because authenticated is default role which
+    // is getting added automatically.
+    if ($role->name !== 'anonymous user' && $role->name !== 'authenticated user') {
+      // Check if user doesn't have this role.
+      if ($edit['roles'][$role->rid] !== $role->name) {
+        // Add role to user.
+        $edit['roles'][$role->rid] = $role->name;
+      }
+    }
+  }
+  // Check if we have any G Suite roles.
+  if (!empty($google_roles)) {
+    // Get all roles we defined in the UI.
+    $google_groups = variable_get('google_groups');
+    $config_defined_roles = [];
+    foreach ($google_groups as $rid) {
+      $role = user_role_load($rid);
+      if ($role->name !== 'anonymous user' && $role->name !== 'authenticated user') {
+        $config_defined_roles[$role->rid] = $role->name;
+      }
+    }
+    $mapped_roles = array();
+    // User roles from Google.
+    foreach ($google_roles as $role) {
+      if (array_search($role, $config_defined_roles) !== FALSE) {
+        $mapped_roles[] = $role;
+      }
+    }
+
+    // Get all roles from user.
+    // Get all google roles.
+    foreach ($edit['roles'] as $rid => $role_name) {
+      if (array_search($role_name, $config_defined_roles) !== FALSE) {
+        if (array_search($role_name, $mapped_roles) === FALSE) {
+          unset($edit['roles'][$rid]);
+        }
+      }
+    }
+  }
+  return $edit;
 }
