@@ -66,15 +66,15 @@ function google_one_tap_roles_sync_form_google_one_tap_settings_form_alter(&$for
     $client = gauth_client_get($gauth_name, FALSE);
     $service = new Google_Service_Directory($client);
     // Get all groups.
-    $result = $service->groups->listGroups(['domain' => $domain_name]);
-    $g_groups = $result->getGroups();
+    $result = $service->roles->listRoles('my_customer');
+    $g_groups = $result->getItems();
     // Go through each group.
     $groups = [];
     foreach ($g_groups as $group) {
       // All characters bust be lower case and replace spaces with '_'.
-      $name = str_replace(' ', '_', strtolower($group->getName()));
+      $name = str_replace(' ', '_', strtolower($group->getRoleName()));
       // Save to array.
-      $groups['group_' . $name] = $group->getName();
+      $groups['group_' . $name] = $group->getRoleName();
     }
     // Get all roles.
     $roles = user_roles();
